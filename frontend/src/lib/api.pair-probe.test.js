@@ -89,10 +89,10 @@ describe('pairRedeem when the request never gets an answer', () => {
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 
-  it('any other answer from the server is passed on as it is, with no probe', async () => {
+  it('an unknown server error is localized without exposing its raw text', async () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify({ error: 'the server is busy, try again in a moment', code: 'busy' }), { status: 503, headers: { 'content-type': 'application/json' } }))
     vi.stubGlobal('fetch', fetch)
-    await expect(pairRedeem('https://gym.example.com', 'ABCD2345')).rejects.toMatchObject({ status: 503, message: 'the server is busy, try again in a moment' })
+    await expect(pairRedeem('https://gym.example.com', 'ABCD2345')).rejects.toMatchObject({ status: 503, message: 'The server is busy. Try again in a moment.' })
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 

@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { webauthnOK, bio, vault, BIO, VAULT, passkeyError } from './api.js'
 import de from '../locales/de.js'
+import italian from '../locales/it.js'
 import { _setLangState } from './i18n-core.js'
 
 const originalPublicKeyCredential = window.PublicKeyCredential
@@ -37,13 +38,24 @@ describe('webauthnOK', () => {
 })
 
 describe('api()', () => {
+  it('localizes a network failure instead of exposing the browser message', async () => {
+    const { api } = await import('./api.js')
+    const original = globalThis.fetch
+    _setLangState('it', italian)
+    globalThis.fetch = async () => { throw new TypeError('Failed to fetch bearer secret') }
+    try {
+      await expect(api('/api/data')).rejects.toMatchObject({ message: italian['Could not connect'] })
+      await expect(api('/api/data')).rejects.not.toHaveProperty('code')
+    } finally { globalThis.fetch = original; _setLangState('en', {}, null, null) }
+  })
+
   it('a failed request throws with the status and the parsed body attached', async () => {
     const { api } = await import('./api.js')
     const original = globalThis.fetch
     globalThis.fetch = async () => ({ ok: false, status: 409, json: async () => ({ error: 'conflict', rev: 3, state: { _rev: 3 } }) })
     try {
       await expect(api('/api/data', { method: 'PUT', body: '{}' })).rejects.toMatchObject({
-        message: 'conflict', status: 409, data: { error: 'conflict', rev: 3, state: { _rev: 3 } }
+        message: 'Server error (HTTP 409)', status: 409, data: { error: 'conflict', rev: 3, state: { _rev: 3 } }
       })
     } finally { globalThis.fetch = original }
   })
@@ -72,7 +84,7 @@ describe('api() refuses an answer that is not the server\'s', () => {
   it('a refused request whose body is not JSON keeps its HTTP status', async () => {
     const { api } = await import('./api.js')
     vi.stubGlobal('fetch', async () => new Response('<html>Bad gateway</html>', { status: 502, headers: { 'content-type': 'text/html' } }))
-    await expect(api('/api/data')).rejects.toMatchObject({ status: 502, message: 'HTTP 502', data: {} })
+    await expect(api('/api/data')).rejects.toMatchObject({ status: 502, message: 'Server error (HTTP 502)', data: {} })
   })
 
   it('pairing with something that is not an openGym server fails instead of saving an empty pairing', async () => {

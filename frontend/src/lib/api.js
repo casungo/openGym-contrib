@@ -1,5 +1,6 @@
 // Backend + WebAuthn helpers (ported from the vanilla app).
 import { t } from './i18n-core.js'
+import { apiErrorMessage } from './api-errors.js'
 import { MOBILE } from './mobile.js'
 import { appBase } from './app-base.js'
 import { nativeFetch } from './capacitor-fetch.js'
@@ -46,6 +47,11 @@ const TIMEOUT_GET_MS = 20000
 const TIMEOUT_MS = 60000
 
 const failure = (message, code, status) => Object.assign(new Error(message), { code, status })
+const networkFailure = () => failure(t('Could not connect'), 'network')
+const localizeNetworkError = e => {
+  if (e instanceof Error) { e.message = t('Could not connect'); return e }
+  return new Error(t('Could not connect'))
+}
 
 export async function api(path, opts) {
   const { timeout, ...init } = opts || {}
@@ -84,13 +90,14 @@ async function request(url, init, ms) {
 // made a push look accepted by a server "from before revisions" — the change was marked synced
 // and dropped from the queue. It is an error, with the status it came with.
 async function exchange(url, init) {
-  const r = await fetch(url, init)
+  let r
+  try { r = await fetch(url, init) } catch (e) { throw localizeNetworkError(e) }
   let data
   let parsed = true
   try { data = await r.json() } catch { parsed = false }
   const body = parsed && data && typeof data === 'object' ? data : null
   // The body rides along on the error: a 409 from /api/data carries the server's document.
-  if (!r.ok) { const e = new Error((body && body.error) || ('HTTP ' + r.status)); e.status = r.status; e.data = body || {}; throw e }
+  if (!r.ok) { const e = new Error(apiErrorMessage(body, r.status)); e.status = r.status; e.data = body || {}; throw e }
   if (!body) throw failure(t('The server answered with something other than openGym data.'), 'bad-response', r.status)
   return body
 }
@@ -147,7 +154,7 @@ export async function apiBlob(path, { expectSize, idleMs = 30000, fetchImpl = gl
     if (!r.ok) {
       let body = null
       try { body = await r.json() } catch { /* not JSON: a proxy's page */ }
-      throw Object.assign(new Error((body && body.error) || 'HTTP ' + r.status), { status: r.status, code: (body && body.code) || 'http', data: body || {} })
+      throw Object.assign(new Error(apiErrorMessage(body, r.status)), { status: r.status, code: (body && body.code) || 'http', data: body || {} })
     }
     const announced = Number(r.headers?.get?.('content-length'))
     if (Number.isFinite(announced) && announced > max) { ctl?.abort(); throw tooBig(r.status) }
@@ -170,6 +177,7 @@ export async function apiBlob(path, { expectSize, idleMs = 30000, fetchImpl = gl
     return new Blob(parts)
   } catch (e) {
     if (idle) throw timedOut()
+    if (!e?.status && !e?.code) throw localizeNetworkError(e)
     throw e
   } finally { clearTimeout(timer) }
 }
@@ -205,15 +213,15 @@ export function apiUpload(path, blob, mime, { onProgress, idleMs = 60000, XHR = 
         return
       }
       if (xhr.status === 413 && !body) { reject(failure('HTTP 413', 'proxy-too-large', 413)); return }
-      const e = Object.assign(new Error((body && body.error) || 'HTTP ' + xhr.status), { status: xhr.status, code: (body && body.code) || 'http', data: body || {} })
+      const e = Object.assign(new Error(apiErrorMessage(body, xhr.status, { upload: true })), { status: xhr.status, code: (body && body.code) || 'http', data: body || {} })
       if (xhr.status === 429) {
         const header = Number(xhr.getResponseHeader && xhr.getResponseHeader('Retry-After'))
         e.retryAfter = Number(body && body.retryAfter) || (Number.isFinite(header) && header > 0 ? header : 60)
       }
       reject(e)
     }
-    xhr.onerror = () => { clearTimeout(timer); reject(Object.assign(new Error('network'), { code: 'network' })) }
-    xhr.onabort = () => { clearTimeout(timer); reject(idle ? timedOut() : Object.assign(new Error('aborted'), { code: 'network' })) }
+    xhr.onerror = () => { clearTimeout(timer); reject(networkFailure()) }
+    xhr.onabort = () => { clearTimeout(timer); reject(idle ? timedOut() : networkFailure()) }
     arm()
     xhr.send(blob)
   })
