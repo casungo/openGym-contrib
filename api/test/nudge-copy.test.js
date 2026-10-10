@@ -7,6 +7,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const { NUDGE_COPY } = await import('../nudge-copy.js');
+const { LANGS, baseLang } = await import('../../frontend/src/lib/i18n-core.js');
+
+test('generated nudge copy covers the app locales and no extra locales', () => {
+  const expected = [...new Set(Object.keys(LANGS).map(baseLang))].sort();
+  assert.deepEqual(Object.keys(NUDGE_COPY).sort(), expected);
+});
 
 test('api/nudge-copy.js matches the frontend strings (node scripts/build-nudge-copy.mjs)', async t => {
   if (!fs.existsSync(path.join(API, '..', 'frontend', 'src', 'lib', 'nudge.js'))) return t.skip('no frontend next to the api');

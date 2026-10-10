@@ -40,6 +40,9 @@ const isMediaPath = p => p.includes('/exercise-media/') || p.includes('/img/') |
 // offline after an update had no ingest to run. Unstamped (a dev server, a test) it is empty.
 const LAZY = '__LAZY__'
 const lazyAssets = () => { try { const a = JSON.parse(LAZY); return Array.isArray(a) ? a : [] } catch { return [] } }
+// Both metadata manifests are installed with the shell so language changes still work offline.
+const MANIFESTS = '__MANIFESTS__'
+const manifestAssets = () => { try { const a = JSON.parse(MANIFESTS); return Array.isArray(a) ? a : [] } catch { return [] } }
 
 // What the shell needs to boot without a network: index.html plus every script/style/icon it
 // references. Read from the served index.html so the list follows the build, not a hand-kept
@@ -71,6 +74,14 @@ async function precache() {
   await Promise.all(code.map(async u => {
     const r = await fetch(u, { cache: 'no-cache' }).catch(e => { throw new Error('precache: ' + u + ' — ' + (e?.message || e)) })
     if (!r.ok || r.redirected) throw new Error('precache: ' + u + ' ' + r.status + (r.redirected ? ' redirected' : ''))
+    await c.put(u, r)
+  }))
+  await Promise.all(manifestAssets().map(async u => {
+    const r = await fetch(u, { cache: 'no-cache' }).catch(e => { throw new Error('precache: ' + u + ' — ' + (e?.message || e)) })
+    if (!r.ok || r.redirected) throw new Error('precache: ' + u + ' ' + r.status + (r.redirected ? ' redirected' : ''))
+    let manifest
+    try { manifest = await r.clone().json() } catch { throw new Error('precache: invalid ' + u) }
+    if (manifest.name !== 'openGym' || !manifest.description || !manifest.lang) throw new Error('precache: invalid ' + u)
     await c.put(u, r)
   }))
   await Promise.all(refs.filter(u => !code.includes(u)).map(u => c.add(u).catch(() => {})))

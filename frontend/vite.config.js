@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { lazyAssets, stampSw } from './scripts/sw-stamp.mjs'
+import { MANIFEST_LANGUAGES, appManifest, initialMetadataScript } from './src/lib/app-metadata.js'
 
 const backend = process.env.API_TARGET || 'http://127.0.0.1:3000'
 // The API refuses a state-changing request that a browser sent from anywhere other than its own
@@ -53,6 +54,34 @@ const umami = {
   }
 }
 
+const localizedManifests = {
+  name: 'opengym-localized-manifests',
+  transformIndexHtml: {
+    order: 'pre',
+    handler(html) {
+      return html.replace(
+        '<link rel="manifest" href="manifest.json" crossorigin="use-credentials">',
+        `<script>${initialMetadataScript()}</script>`
+      )
+    }
+  },
+  configureServer(server) {
+    server.middlewares.use((req, res, next) => {
+      const path = new URL(req.url, 'http://vite.local').pathname
+      const match = /^\/manifest\.([a-z]{2})\.json$/.exec(path)
+      if (!match || !MANIFEST_LANGUAGES.includes(match[1])) return next()
+      res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8')
+      res.setHeader('Cache-Control', 'no-cache')
+      res.end(JSON.stringify(appManifest(match[1])))
+    })
+  },
+  generateBundle() {
+    for (const lang of MANIFEST_LANGUAGES) {
+      this.emitFile({ type: 'asset', fileName: `manifest.${lang}.json`, source: JSON.stringify(appManifest(lang), null, 2) })
+    }
+  }
+}
+
 // The service worker's cache is named after the build (public/sw.js carries a `__BUILD__`
 // placeholder): a deploy is then a new worker with its own cache, and the previous build's
 // shell and chunks are dropped on activate instead of piling up under one fixed name. The
@@ -72,7 +101,7 @@ const swStamp = {
     const html = join(outDir, 'index.html'), sw = join(outDir, 'sw.js')
     if (!existsSync(html) || !existsSync(sw)) return
     const stamp = createHash('sha256').update(readFileSync(html)).digest('hex').slice(0, 10)
-    writeFileSync(sw, stampSw(readFileSync(sw, 'utf8'), { stamp, lazy }))
+    writeFileSync(sw, stampSw(readFileSync(sw, 'utf8'), { stamp, lazy, manifests: MANIFEST_LANGUAGES.map(l => `./manifest.${l}.json`) }))
   }
 }
 
@@ -102,7 +131,7 @@ const appVersion = process.env.APP_BUILD ? `${pkgVersion}+${process.env.APP_BUIL
 
 export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(appVersion) },
-  plugins: [react(), umami, flavor, swStamp, catalogueMedia],
+  plugins: [react(), umami, flavor, localizedManifests, swStamp, catalogueMedia],
   base: './',
   server: {
     // The Coach's core (payload, validator, prompts, HTTP adapters) lives in ../api/coach/core

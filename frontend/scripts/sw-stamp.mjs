@@ -27,8 +27,9 @@ export function lazyAssets(bundle) {
 }
 
 /** The worker with its build stamp and its list in place of the two placeholders. */
-export function stampSw(source, { stamp, lazy = [] }) {
+export function stampSw(source, { stamp, lazy = [], manifests = [] }) {
   return source
     .replace('__BUILD__', () => stamp)
     .replace("'__LAZY__'", () => JSON.stringify(JSON.stringify(lazy)))
+    .replace("'__MANIFESTS__'", () => JSON.stringify(JSON.stringify(manifests)))
 }

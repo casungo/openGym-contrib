@@ -4,6 +4,7 @@
 // subscription hook `useLang`.
 
 import { useSyncExternalStore } from 'react'
+import { updateBrowserMetadata } from './app-metadata.js'
 import {
   LANGS, INSTR_LANGS, EXERCISE_NAME_LANGS, DATE_LOCALES, DERIVED_LOCALES, RTL_LANGS,
   getLang, dateLocale, t, tn, instrFor, exerciseNameFor, exerciseNameSearchText, getVersion,
@@ -65,8 +66,14 @@ export async function setLang(l, showEn, enOnly) {
   lastShowEn = show
   lastEnOnly = only
   const base = baseLang(l)
-  let dict = {}, instr = null, exerciseNames = null
-  try { dict = base === 'en' ? {} : (await localePacks['../locales/' + base + '.js']()).default } catch (e) { dict = {} }
+  let dict = {}, metadata = null, instr = null, exerciseNames = null
+  try {
+    if (base !== 'en') {
+      const pack = await localePacks['../locales/' + base + '.js']()
+      dict = pack.default
+      metadata = pack.metadata
+    }
+  } catch (e) { dict = {} }
   try { instr = base === 'en' || !INSTR_LANGS.includes(base) ? null : (await instrPacks['../instr/' + base + '.js']()).default } catch (e) { instr = null }
   try {
     exerciseNames = base === 'en' || !EXERCISE_NAME_LANGS.includes(base)
@@ -77,8 +84,14 @@ export async function setLang(l, showEn, enOnly) {
   if (detailsLoaded) loadDetails()
   document.documentElement.lang = l
   document.documentElement.dir = RTL_LANGS.has(l) ? 'rtl' : 'ltr'
+  const descriptionMeta = document.querySelector('meta[name="description"]')
+  if (descriptionMeta) englishDescription ??= descriptionMeta.content
+  updateBrowserMetadata(l)
+  if (descriptionMeta) descriptionMeta.content = metadata?.description || englishDescription
   notify()
 }
+
+let englishDescription
 
 // Re-renders the subscribing component (and its children) whenever the language changes.
 export function useLang() {

@@ -993,6 +993,20 @@ describe('Workout live-presence "left" signal when the page goes away', () => {
 })
 
 describe('progression guidance', () => {
+  it('formats progression increments in Italian without changing the prescription', async () => {
+    const { _setLangState } = await import('../lib/i18n-core.js')
+    const { default: italian } = await import('../locales/it.js')
+    const plan = { policy: 'linear', kind: 'up', weight: 62.5, why: ['Every rep last time. {0} {1} more.', 2.5, 'kg'] }
+    _setLangState('it', italian, null, null)
+    try {
+      await mount([exercise('plain-bench', [false], { plan })])
+      expect(container.querySelector('.progline')?.textContent).toContain('2,5 kg in più.')
+      expect(mocks.S.active.entries[0].plan.why).toEqual(plan.why)
+    } finally {
+      _setLangState('en', {}, null, null)
+    }
+  })
+
   it('labels the visible outcome with the policy that calculated it', async () => {
     await mount([exercise('plain-bench', [false, false, false], {
       plan: {

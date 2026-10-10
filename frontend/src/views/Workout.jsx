@@ -682,7 +682,7 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
     {guidance && onProgressionSettings && <button type="button" className={'progline' + (plan.kind === 'deload' ? ' warn' : '')}
       aria-label={t('Open exercise settings')} onClick={onProgressionSettings}>
       <Icon name={plan.kind === 'up' ? 'arrowUp' : plan.kind === 'deload' ? 'arrowDown' : 'lightbulb'} />
-      <span><strong>{t(guidance.policyLabel)}</strong> · {t(...guidance.why)}</span>
+      <span><strong>{t(guidance.policyLabel)}</strong> · {t(...guidance.why.map(value => typeof value === 'number' ? fmtPlate(value) : value))}</span>
     </button>}
     </>}
     <div className="card" style={{ marginTop: 10, marginBottom: 0 }}>

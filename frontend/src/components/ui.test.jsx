@@ -2,7 +2,9 @@
 import React, { act, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Slider, Stepper, NumberField, numWidthCh, SLIDER_GRAB_PX } from './ui.jsx'
+import { SearchField, Slider, Stepper, NumberField, numWidthCh, SLIDER_GRAB_PX } from './ui.jsx'
+import { _setLangState } from '../lib/i18n-core.js'
+import italian from '../locales/it.js'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -194,6 +196,15 @@ describe('Stepper', () => {
     expect(host.querySelector('button[aria-label="Increase load"]')).toBeTruthy()
   })
 
+  it('translates the action as well as the field in Italian accessible names', () => {
+    _setLangState('it', italian)
+    try {
+      act(() => root.render(<Host initial={10} step={1} onChange={vi.fn()} ariaLabel="carico" />))
+      expect(host.querySelector('button[aria-label="Diminuisci carico"]')).toBeTruthy()
+      expect(host.querySelector('button[aria-label="Aumenta carico"]')).toBeTruthy()
+    } finally { _setLangState('en', {}) }
+  })
+
   it('uses the caller step rule', () => {
     const onChange = vi.fn()
     act(() => root.render(<Host initial={61.3} step={2.5} onChange={onChange}
@@ -311,5 +322,14 @@ describe('NumberField select on tap', () => {
     act(() => input.focus())
     act(() => input.blur())
     expect(mouseup(input).defaultPrevented).toBe(false)
+  })
+})
+
+describe('SearchField accessible name', () => {
+  it('uses the translated placeholder and respects an explicit label', () => {
+    act(() => root.render(<SearchField value="" onChange={vi.fn()} placeholder="Cerca esercizi" />))
+    expect(host.querySelector('input').getAttribute('aria-label')).toBe('Cerca esercizi')
+    act(() => root.render(<SearchField value="" onChange={vi.fn()} placeholder="Cerca…" aria-label="Cerca nelle impostazioni" />))
+    expect(host.querySelector('input').getAttribute('aria-label')).toBe('Cerca nelle impostazioni')
   })
 })
